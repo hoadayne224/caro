@@ -1,7 +1,0 @@
-Kết quả: 🤖 Máy thắng | Chế độ: hard | Thời gian: 4s
-Kết quả: 🤖 Máy thắng | Chế độ: hard | Thời gian: 6s
-Kết quả: 🤖 Máy thắng | Chế độ: hard | Thời gian: 7s
-Kết quả: Người chơi X thắng | Chế độ: easy | Thời gian: 9s
-Kết quả: Người chơi X thắng | Chế độ: easy | Thời gian: 4s
-Kết quả: Người chơi X thắng | Chế độ: easy | Thời gian: 11s
-Kết quả: Người chơi X thắng | Chế độ: medium | Thời gian: 7s
