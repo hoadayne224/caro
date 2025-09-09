@@ -2,13 +2,14 @@ import tkinter as tk
 from tkinter import messagebox
 import math
 import random
+import time
+import os
 from typing import List, Tuple, Optional
 
 # ================== CẤU HÌNH ==================
-BOARD_SIZE  = 30
-CELL_SIZE   = 40
+BOARD_SIZE  = 60     # số ô bàn cờ
+CELL_SIZE   = 30     # kích thước 1 ô
 
-# Độ khó cho AI Best-First Search
 SEARCH_DEPTH = 2
 BEAM_WIDTH   = 8
 NEAR_RADIUS  = 2
@@ -17,17 +18,16 @@ PLAYER_HUMAN = "X"
 PLAYER_AI    = "O"
 
 INF = 10**12
+HISTORY_FILE = "history.txt"
 
-# ==============================================
 
 class CaroGame:
     def __init__(self, root, mode="pvp"):
         self.root = root
-        self.mode = mode   # 👈 thêm dòng này
-
+        self.mode = mode
         self.root.title("Cờ Caro")
 
-        # Thanh menu
+        # ================== MENU ==================
         menubar = tk.Menu(root)
         root.config(menu=menubar)
 
@@ -38,15 +38,20 @@ class CaroGame:
         game_menu.add_command(label="Người vs Máy – Trung bình", command=lambda: self.new_game("medium"))
         game_menu.add_command(label="Người vs Máy – Khó", command=lambda: self.new_game("hard"))
         game_menu.add_separator()
-        game_menu.add_command(label="Thoát", command=root.quit)
+        game_menu.add_command(label="Thoát", command=self.exit_to_menu)
 
-        # Nút thao tác
+        # ================== NÚT & ĐỒNG HỒ ==================
         top = tk.Frame(root)
         top.pack(side=tk.TOP, pady=6)
-        tk.Button(top, text="Ván mới", width=10, bg="#c8f7c5", command=lambda: self.new_game(self.mode)).pack(side=tk.LEFT, padx=4)
-        tk.Button(top, text="Thoát", width=10, bg="#f7c5c5", command=root.quit).pack(side=tk.LEFT, padx=4)
+        tk.Button(top, text="Ván mới", width=10, bg="#c8f7c5",
+                  command=lambda: self.new_game(self.mode)).pack(side=tk.LEFT, padx=4)
+        tk.Button(top, text="Thoát", width=10, bg="#f7c5c5",
+                  command=self.exit_to_menu).pack(side=tk.LEFT, padx=4)
 
-        # Bàn cờ
+        self.time_label = tk.Label(top, text="⏱ 00:00", font=("Arial", 12), fg="blue")
+        self.time_label.pack(side=tk.LEFT, padx=20)
+
+        # ================== BÀN CỜ ==================
         self.canvas = tk.Canvas(root,
                                 width=BOARD_SIZE*CELL_SIZE,
                                 height=BOARD_SIZE*CELL_SIZE,
@@ -54,14 +59,18 @@ class CaroGame:
         self.canvas.pack()
         self.canvas.bind("<Button-1>", self.handle_click)
 
-        # Trạng thái
+        # ================== TRẠNG THÁI ==================
         self.board: List[List[str]] = [["" for _ in range(BOARD_SIZE)] for _ in range(BOARD_SIZE)]
         self.current_player = PLAYER_HUMAN
 
+        # Đồng hồ
+        self.start_time = None
+        self.timer_running = False
+
         self.draw_grid()
+        self.start_timer()
 
-
-    # ---------- UI ----------
+    # ================== UI ==================
     def draw_grid(self):
         self.canvas.delete("all")
         for i in range(BOARD_SIZE):
@@ -83,7 +92,10 @@ class CaroGame:
         self.draw_grid()
         self.canvas.bind("<Button-1>", self.handle_click)
 
-        # 🔹 cập nhật tiêu đề cửa sổ
+        # reset thời gian
+        self.start_timer()
+
+        # cập nhật tiêu đề
         mode_name = {
             "pvp": "Người vs Người",
             "easy": "Người vs Máy – Dễ",
@@ -95,7 +107,30 @@ class CaroGame:
     def disable_board(self):
         self.canvas.unbind("<Button-1>")
 
-    # ---------- SỰ KIỆN ----------
+    # ================== TIMER ==================
+    def start_timer(self):
+        self.start_time = time.time()
+        self.timer_running = True
+        self.update_timer()
+
+    def stop_timer(self):
+        self.timer_running = False
+
+    def update_timer(self):
+        if self.timer_running:
+            elapsed = int(time.time() - self.start_time)
+            minutes = elapsed // 60
+            seconds = elapsed % 60
+            self.time_label.config(text=f"⏱ {minutes:02}:{seconds:02}")
+            self.root.after(1000, self.update_timer)
+
+    # ================== LỊCH SỬ ==================
+    def save_history(self, result: str):
+        elapsed = int(time.time() - self.start_time) if self.start_time else 0
+        with open(HISTORY_FILE, "a", encoding="utf-8") as f:
+            f.write(f"Kết quả: {result} | Chế độ: {self.mode} | Thời gian: {elapsed}s\n")
+
+    # ================== XỬ LÝ CLICK ==================
     def handle_click(self, event):
         r = event.y // CELL_SIZE
         c = event.x // CELL_SIZE
@@ -107,17 +142,18 @@ class CaroGame:
 
         if self.check_win(r, c):
             messagebox.showinfo("Kết quả", f"🎉 Người chơi {self.current_player} thắng!")
+            self.save_history(f"Người chơi {self.current_player} thắng")
             self.disable_board()
+            self.stop_timer()
             return
 
-        # Đổi lượt
         if self.mode == "pvp":
             self.current_player = PLAYER_AI if self.current_player == PLAYER_HUMAN else PLAYER_HUMAN
         else:
             self.current_player = PLAYER_AI
             self.root.after(200, self.ai_move)
 
-    # ---------- LOGIC CỜ ----------
+    # ================== LOGIC CỜ ==================
     @staticmethod
     def in_bounds(r, c) -> bool:
         return 0 <= r < BOARD_SIZE and 0 <= c < BOARD_SIZE
@@ -150,7 +186,7 @@ class CaroGame:
                 return True
         return False
 
-    # ---------- AI ----------
+    # ================== AI ==================
     def ai_move(self):
         if self.mode == "easy":
             self.ai_easy()
@@ -160,21 +196,61 @@ class CaroGame:
             self.ai_best_first()
 
     def ai_easy(self):
-        empties = [(r,c) for r in range(BOARD_SIZE) for c in range(BOARD_SIZE) if self.board[r][c] == ""]
-        if not empties:
-            messagebox.showinfo("Kết quả", "Hòa!")
-            return
-        r,c = random.choice(empties)
-        self.place(r,c,PLAYER_AI)
-        self.draw_mark(r,c,PLAYER_AI)
-        if self.check_win(r,c):
+        # 1. Nước thắng ngay cho AI → đánh luôn
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                if self.board[r][c] == "":
+                    self.place(r, c, PLAYER_AI)
+                    if self.check_win(r, c):
+                        self.draw_mark(r, c, PLAYER_AI)
+                        messagebox.showinfo("Kết quả", "🤖 Máy thắng!")
+                        self.disable_board()
+                        self.stop_timer()
+                        return
+                    self.undo(r, c)
+
+        # 2. Chặn thắng ngay cho người chơi
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                if self.board[r][c] == "":
+                    self.place(r, c, PLAYER_HUMAN)
+                    if self.check_win(r, c):
+                        self.undo(r, c)
+                        self.place(r, c, PLAYER_AI)
+                        self.draw_mark(r, c, PLAYER_AI)
+                        self.current_player = PLAYER_HUMAN
+                        return
+                    self.undo(r, c)
+
+        # 3. Ưu tiên đánh gần quân người chơi (đu bám)
+        moves = []
+        for r in range(BOARD_SIZE):
+            for c in range(BOARD_SIZE):
+                if self.board[r][c] == "":
+                    for dr in range(-1, 2):
+                        for dc in range(-1, 2):
+                            rr, cc = r+dr, c+dc
+                            if self.in_bounds(rr, cc) and self.board[rr][cc] == PLAYER_HUMAN:
+                                moves.append((r, c))
+                                break
+        if moves:
+            r, c = random.choice(moves)
+        else:
+            # 4. fallback random
+            empties = [(r, c) for r in range(BOARD_SIZE) for c in range(BOARD_SIZE) if self.board[r][c] == ""]
+            r, c = random.choice(empties)
+
+        # Đặt cờ
+        self.place(r, c, PLAYER_AI)
+        self.draw_mark(r, c, PLAYER_AI)
+        if self.check_win(r, c):
             messagebox.showinfo("Kết quả", "🤖 Máy thắng!")
             self.disable_board()
-            return
-        self.current_player = PLAYER_HUMAN
+            self.stop_timer()
+        else:
+            self.current_player = PLAYER_HUMAN
 
     def ai_medium(self):
-        # chọn ô gần quân X để thủ hoặc gần O để tấn công
         best_score = -1
         best_move = None
         for r in range(BOARD_SIZE):
@@ -190,7 +266,9 @@ class CaroGame:
             self.draw_mark(r,c,PLAYER_AI)
             if self.check_win(r,c):
                 messagebox.showinfo("Kết quả", "🤖 Máy thắng!")
+                self.save_history("🤖 Máy thắng")
                 self.disable_board()
+                self.stop_timer()
                 return
         self.current_player = PLAYER_HUMAN
 
@@ -203,7 +281,9 @@ class CaroGame:
         self.draw_mark(r,c,PLAYER_AI)
         if self.check_win(r,c):
             messagebox.showinfo("Kết quả", "🤖 Máy thắng!")
+            self.save_history("🤖 Máy thắng")
             self.disable_board()
+            self.stop_timer()
             return
         self.current_player = PLAYER_HUMAN
 
@@ -217,7 +297,7 @@ class CaroGame:
                     score += 1
         return score
 
-    # ---------- AI BEST FIRST SEARCH ----------
+    # ================== BEST FIRST SEARCH ==================
     def find_best_move_best_first(self) -> Tuple[Optional[int], Optional[int]]:
         moves = self.generate_moves()
         if not moves:
@@ -238,7 +318,9 @@ class CaroGame:
         best_move = None
         for _, (r, c) in scored:
             self.place(r, c, PLAYER_AI)
-            val = self.minimax_beam(depth=SEARCH_DEPTH-1, player=self.opponent(PLAYER_AI), alpha=-INF, beta=INF)
+            val = self.minimax_beam(depth=SEARCH_DEPTH-1,
+                                    player=self.opponent(PLAYER_AI),
+                                    alpha=-INF, beta=INF)
             self.undo(r, c)
             if val > best_val:
                 best_val = val
@@ -308,7 +390,7 @@ class CaroGame:
                         cand.add((rr, cc))
         return list(cand) if cand else [(r, c) for r in range(BOARD_SIZE) for c in range(BOARD_SIZE) if self.board[r][c] == ""]
 
-    # ---------- ĐÁNH GIÁ ----------
+    # ================== ĐÁNH GIÁ ==================
     def evaluate_board(self, perspective: str) -> int:
         return self.score_side(perspective) - self.score_side(self.opponent(perspective))
 
@@ -354,7 +436,16 @@ class CaroGame:
         open2 = 1 if (self.in_bounds(rr2, cc2) and self.board[rr2][cc2] == "") else 0
         return length, (open1 + open2)
 
-# ================== CHẠY ỨNG DỤNG ==================
+    # ================== THOÁT VỀ MENU ==================
+    def exit_to_menu(self):
+        self.root.destroy()
+        import menu
+        new_root = tk.Tk()
+        menu.MenuApp(new_root)
+        new_root.mainloop()
+
+
+# ================== CHẠY ==================
 if __name__ == "__main__":
     root = tk.Tk()
     app = CaroGame(root)
